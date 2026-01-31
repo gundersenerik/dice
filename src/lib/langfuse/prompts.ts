@@ -15,6 +15,7 @@ const PROMPT_REGISTRY = [
   'push-notification-breaking',
   'cta-button',
   'email-preheader',
+  'subject_line_from_email_body',
 ];
 
 export async function fetchPromptTemplates(): Promise<PromptTemplate[]> {
