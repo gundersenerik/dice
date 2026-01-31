@@ -8,41 +8,46 @@ export interface PromptTemplate {
   prompt: string;
 }
 
-// Registry of available prompts - these should match your LangFuse prompt names
-const PROMPT_REGISTRY = [
-  'subject-line-sports',
-  'subject-line-politics',
-  'push-notification-breaking',
-  'cta-button',
-  'email-preheader',
-  'subject_line_from_email_body',
-];
-
+/**
+ * Fetches all prompts from LangFuse with the 'production' label.
+ * This is dynamic - no hardcoded list needed.
+ */
 export async function fetchPromptTemplates(): Promise<PromptTemplate[]> {
   const langfuse = getLangfuse();
   const templates: PromptTemplate[] = [];
 
-  for (const name of PROMPT_REGISTRY) {
-    try {
-      const prompt = await langfuse.getPrompt(name, undefined, {
-        label: 'production',
-        type: 'text',
-      });
+  try {
+    // Fetch all prompts with 'production' label from LangFuse
+    const response = await langfuse.api.promptsList({
+      label: 'production',
+      limit: 100, // Max per request
+    });
 
-      if (prompt) {
-        const variables = extractVariables(prompt.prompt);
-
-        templates.push({
-          id: name,
-          name: prompt.name,
-          version: prompt.version,
-          variables,
-          prompt: prompt.prompt,
+    // The list endpoint returns metadata, we need to fetch each prompt's content
+    for (const promptMeta of response.data) {
+      try {
+        const prompt = await langfuse.getPrompt(promptMeta.name, undefined, {
+          label: 'production',
+          type: 'text',
         });
+
+        if (prompt) {
+          const variables = extractVariables(prompt.prompt);
+
+          templates.push({
+            id: promptMeta.name,
+            name: prompt.name,
+            version: prompt.version,
+            variables,
+            prompt: prompt.prompt,
+          });
+        }
+      } catch (error) {
+        console.error(`Failed to fetch prompt ${promptMeta.name}:`, error);
       }
-    } catch (error) {
-      console.error(`Failed to fetch prompt ${name}:`, error);
     }
+  } catch (error) {
+    console.error('Failed to list prompts from LangFuse:', error);
   }
 
   return templates;
@@ -98,8 +103,4 @@ function extractVariables(template: string): string[] {
   }
 
   return Array.from(variables);
-}
-
-export function getPromptRegistry(): string[] {
-  return PROMPT_REGISTRY;
 }
