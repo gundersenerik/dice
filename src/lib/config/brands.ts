@@ -1,16 +1,14 @@
 export const BRANDS = [
-  { id: 'aftonbladet', name: 'Aftonbladet', country: 'SE' },
+  // Norway
   { id: 'vg', name: 'VG', country: 'NO' },
+  { id: 'ap', name: 'Aftenposten', country: 'NO' },
   { id: 'bt', name: 'Bergens Tidende', country: 'NO' },
-  { id: 'svd', name: 'Svenska Dagbladet', country: 'SE' },
   { id: 'e24', name: 'E24', country: 'NO' },
+  { id: 'sa', name: 'Stavanger Aftenblad', country: 'NO' },
+  // Sweden
+  { id: 'ab', name: 'Aftonbladet', country: 'SE' },
+  { id: 'svd', name: 'Svenska Dagbladet', country: 'SE' },
   { id: 'omni', name: 'Omni', country: 'SE' },
-  { id: 'podme', name: 'Podme', country: 'NO' },
-  { id: 'prisjakt', name: 'Prisjakt', country: 'SE' },
-  { id: 'lendo', name: 'Lendo', country: 'SE' },
-  { id: 'blocket', name: 'Blocket', country: 'SE' },
-  { id: 'finn', name: 'FINN.no', country: 'NO' },
-  { id: 'tori', name: 'Tori.fi', country: 'FI' },
 ] as const;
 
 export type Brand = (typeof BRANDS)[number];

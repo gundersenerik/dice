@@ -26,6 +26,8 @@ export async function GET() {
         variables: t.variables,
         // Model(s) configured by admin in LangFuse
         models: getModelsFromConfig(t.config),
+        // Tags for filtering (e.g., 'brand:vg', 'brand:ab')
+        tags: t.tags,
         // Don't expose the actual prompt to the client
       })),
     });

@@ -21,6 +21,8 @@ export interface PromptTemplate {
   prompt: string;
   /** Admin-configured settings from LangFuse */
   config?: PromptConfig;
+  /** Tags from LangFuse (e.g., 'brand:vg', 'brand:ab') */
+  tags: string[];
 }
 
 /**
@@ -49,6 +51,8 @@ export async function fetchPromptTemplates(): Promise<PromptTemplate[]> {
         if (prompt) {
           const variables = extractVariables(prompt.prompt);
           const config = parsePromptConfig(prompt.config);
+          // Get tags from the prompt metadata
+          const tags = promptMeta.tags || [];
 
           templates.push({
             id: promptMeta.name,
@@ -57,6 +61,7 @@ export async function fetchPromptTemplates(): Promise<PromptTemplate[]> {
             variables,
             prompt: prompt.prompt,
             config,
+            tags,
           });
         }
       } catch (error) {
@@ -85,6 +90,9 @@ export async function getPromptById(
 
     const variables = extractVariables(prompt.prompt);
     const config = parsePromptConfig(prompt.config);
+    // Note: getPrompt doesn't return tags, so we use empty array
+    // Tags are primarily used for filtering in fetchPromptTemplates
+    const tags: string[] = [];
 
     return {
       id: promptId,
@@ -93,6 +101,7 @@ export async function getPromptById(
       variables,
       prompt: prompt.prompt,
       config,
+      tags,
     };
   } catch {
     return null;
@@ -173,4 +182,16 @@ export function getModelsFromConfig(config?: PromptConfig): string[] | null {
   }
 
   return null;
+}
+
+/**
+ * Filter templates by brand tag.
+ * Tags should be in format 'brand:brandId' (e.g., 'brand:vg', 'brand:ab')
+ */
+export function filterTemplatesByBrand(
+  templates: PromptTemplate[],
+  brandId: string
+): PromptTemplate[] {
+  const brandTag = `brand:${brandId}`;
+  return templates.filter((t) => t.tags.includes(brandTag));
 }

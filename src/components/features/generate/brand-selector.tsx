@@ -6,9 +6,11 @@ interface BrandSelectorProps {
   value: string;
   onChange: (brand: string) => void;
   disabled?: boolean;
+  /** If true, returns brand ID instead of name */
+  useId?: boolean;
 }
 
-export function BrandSelector({ value, onChange, disabled }: BrandSelectorProps) {
+export function BrandSelector({ value, onChange, disabled, useId = false }: BrandSelectorProps) {
   // Group brands by country
   const brandsByCountry = BRANDS.reduce(
     (acc, brand) => {
@@ -38,7 +40,7 @@ export function BrandSelector({ value, onChange, disabled }: BrandSelectorProps)
       {Object.entries(brandsByCountry).map(([country, brands]) => (
         <optgroup key={country} label={countryNames[country] || country}>
           {brands.map((brand) => (
-            <option key={brand.id} value={brand.name}>
+            <option key={brand.id} value={useId ? brand.id : brand.name}>
               {brand.name}
             </option>
           ))}

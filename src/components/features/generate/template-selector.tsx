@@ -8,6 +8,7 @@ interface Template {
   version: number;
   variables: string[];
   models: string[] | null;
+  tags: string[];
 }
 
 interface TemplateSelectorProps {

@@ -1,12 +1,14 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { BrandSelector } from './brand-selector';
 import { TemplateSelector } from './template-selector';
 import { VariableForm } from './variable-form';
 import { GenerationResult } from './generation-result';
 import { Loader2 } from 'lucide-react';
+import { getBrandById } from '@/lib/config/brands';
 
 interface Template {
   id: string;
@@ -15,6 +17,8 @@ interface Template {
   variables: string[];
   /** Model(s) configured by admin in LangFuse - null means no config */
   models: string[] | null;
+  /** Tags for filtering (e.g., 'brand:vg') */
+  tags: string[];
 }
 
 interface GenerationOutput {
@@ -30,6 +34,7 @@ interface GenerationOutput {
 
 export function GenerateForm() {
   const [templates, setTemplates] = useState<Template[]>([]);
+  const [selectedBrandId, setSelectedBrandId] = useState<string>('');
   const [selectedTemplate, setSelectedTemplate] = useState<Template | null>(null);
   const [variables, setVariables] = useState<Record<string, string>>({});
   const [isLoading, setIsLoading] = useState(false);
@@ -56,25 +61,50 @@ export function GenerateForm() {
     fetchTemplates();
   }, []);
 
-  // Reset variables when template changes
+  // Filter templates by selected brand
+  const filteredTemplates = useMemo(() => {
+    if (!selectedBrandId) return [];
+    const brandTag = `brand:${selectedBrandId}`;
+    return templates.filter((t) => t.tags.includes(brandTag));
+  }, [templates, selectedBrandId]);
+
+  // Reset template when brand changes
+  useEffect(() => {
+    setSelectedTemplate(null);
+    setVariables({});
+    setResults([]);
+    setError(null);
+  }, [selectedBrandId]);
+
+  // Reset variables when template changes, pre-fill brand
   useEffect(() => {
     if (selectedTemplate) {
       const initialVariables: Record<string, string> = {};
+      const selectedBrand = getBrandById(selectedBrandId);
+
       selectedTemplate.variables.forEach((v) => {
-        initialVariables[v] = '';
+        // Pre-fill brand variable with selected brand name
+        if (v === 'brand' && selectedBrand) {
+          initialVariables[v] = selectedBrand.name;
+        } else {
+          initialVariables[v] = '';
+        }
       });
       setVariables(initialVariables);
       setResults([]);
       setError(null);
       setGenerationProgress(null);
     }
-  }, [selectedTemplate]);
+  }, [selectedTemplate, selectedBrandId]);
 
   const handleGenerate = async () => {
     if (!selectedTemplate) return;
 
+    // Get variables to validate (exclude brand since it's pre-filled)
+    const variablesToValidate = selectedTemplate.variables.filter((v) => v !== 'brand');
+
     // Validate all variables are filled
-    const missingVars = selectedTemplate.variables.filter(
+    const missingVars = variablesToValidate.filter(
       (v) => !variables[v]?.trim()
     );
     if (missingVars.length > 0) {
@@ -132,6 +162,12 @@ export function GenerateForm() {
     }
   };
 
+  // Get variables to display in the form (exclude brand since it's selected in Step 1)
+  const displayVariables = useMemo(() => {
+    if (!selectedTemplate) return [];
+    return selectedTemplate.variables.filter((v) => v !== 'brand');
+  }, [selectedTemplate]);
+
   const canGenerate =
     selectedTemplate &&
     selectedTemplate.variables.every((v) => variables[v]?.trim()) &&
@@ -151,51 +187,73 @@ export function GenerateForm() {
 
   return (
     <div className="space-y-6">
-      {/* Step 1: Select Template */}
+      {/* Step 1: Select Brand */}
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <span className="flex items-center justify-center w-6 h-6 rounded-full bg-blue-100 text-blue-700 text-sm font-bold">
               1
             </span>
-            Select Template
+            Select Brand
           </CardTitle>
         </CardHeader>
         <CardContent>
-          {isLoadingTemplates ? (
-            <div className="flex items-center gap-2 text-gray-500">
-              <Loader2 className="w-4 h-4 animate-spin" />
-              Loading templates...
-            </div>
-          ) : templates.length === 0 ? (
-            <div className="text-gray-500">
-              No templates available. Create templates in LangFuse with the
-              &quot;production&quot; label.
-            </div>
-          ) : (
-            <TemplateSelector
-              templates={templates}
-              selected={selectedTemplate}
-              onSelect={setSelectedTemplate}
-            />
-          )}
+          <BrandSelector
+            value={selectedBrandId}
+            onChange={setSelectedBrandId}
+            useId={true}
+          />
         </CardContent>
       </Card>
 
-      {/* Step 2: Fill Variables */}
-      {selectedTemplate && (
+      {/* Step 2: Select Template (filtered by brand) */}
+      {selectedBrandId && (
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <span className="flex items-center justify-center w-6 h-6 rounded-full bg-blue-100 text-blue-700 text-sm font-bold">
                 2
               </span>
+              Select Template
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            {isLoadingTemplates ? (
+              <div className="flex items-center gap-2 text-gray-500">
+                <Loader2 className="w-4 h-4 animate-spin" />
+                Loading templates...
+              </div>
+            ) : filteredTemplates.length === 0 ? (
+              <div className="text-gray-500">
+                No templates available for this brand. Add the tag{' '}
+                <code className="bg-gray-100 px-1 rounded">brand:{selectedBrandId}</code>{' '}
+                to prompts in LangFuse.
+              </div>
+            ) : (
+              <TemplateSelector
+                templates={filteredTemplates}
+                selected={selectedTemplate}
+                onSelect={setSelectedTemplate}
+              />
+            )}
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Step 3: Fill Variables (excluding brand) */}
+      {selectedTemplate && displayVariables.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <span className="flex items-center justify-center w-6 h-6 rounded-full bg-blue-100 text-blue-700 text-sm font-bold">
+                3
+              </span>
               Fill Variables
             </CardTitle>
           </CardHeader>
           <CardContent>
             <VariableForm
-              variables={selectedTemplate.variables}
+              variables={displayVariables}
               values={variables}
               onChange={setVariables}
             />
