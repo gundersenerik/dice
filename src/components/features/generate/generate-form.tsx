@@ -5,7 +5,6 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { TemplateSelector } from './template-selector';
 import { VariableForm } from './variable-form';
-import { ModelSelector } from './model-selector';
 import { GenerationResult } from './generation-result';
 import { Loader2 } from 'lucide-react';
 
@@ -14,6 +13,8 @@ interface Template {
   name: string;
   version: number;
   variables: string[];
+  /** Model(s) configured by admin in LangFuse - null means no config */
+  models: string[] | null;
 }
 
 interface GenerationOutput {
@@ -30,12 +31,12 @@ interface GenerationOutput {
 export function GenerateForm() {
   const [templates, setTemplates] = useState<Template[]>([]);
   const [selectedTemplate, setSelectedTemplate] = useState<Template | null>(null);
-  const [selectedModel, setSelectedModel] = useState<string>('claude-sonnet-4-20250514');
   const [variables, setVariables] = useState<Record<string, string>>({});
   const [isLoading, setIsLoading] = useState(false);
   const [isLoadingTemplates, setIsLoadingTemplates] = useState(true);
-  const [result, setResult] = useState<GenerationOutput | null>(null);
+  const [results, setResults] = useState<GenerationOutput[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const [generationProgress, setGenerationProgress] = useState<string | null>(null);
 
   // Fetch templates on mount
   useEffect(() => {
@@ -63,8 +64,9 @@ export function GenerateForm() {
         initialVariables[v] = '';
       });
       setVariables(initialVariables);
-      setResult(null);
+      setResults([]);
       setError(null);
+      setGenerationProgress(null);
     }
   }, [selectedTemplate]);
 
@@ -80,38 +82,72 @@ export function GenerateForm() {
       return;
     }
 
+    // Check if template has model config
+    if (!selectedTemplate.models || selectedTemplate.models.length === 0) {
+      setError('No model configured for this template. Please configure model(s) in LangFuse prompt config.');
+      return;
+    }
+
     setIsLoading(true);
     setError(null);
-    setResult(null);
+    setResults([]);
+    setGenerationProgress(null);
+
+    const modelsToTest = selectedTemplate.models;
+    const generatedResults: GenerationOutput[] = [];
 
     try {
-      const res = await fetch('/api/generate', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          templateId: selectedTemplate.id,
-          variables,
-          model: selectedModel,
-        }),
-      });
+      // Generate with each configured model
+      for (let i = 0; i < modelsToTest.length; i++) {
+        const model = modelsToTest[i];
+        setGenerationProgress(`Generating with ${model} (${i + 1}/${modelsToTest.length})...`);
 
-      const data = await res.json();
+        const res = await fetch('/api/generate', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            templateId: selectedTemplate.id,
+            variables,
+            model,
+          }),
+        });
 
-      if (!res.ok) {
-        throw new Error(data.error || data.message || 'Generation failed');
+        const data = await res.json();
+
+        if (!res.ok) {
+          throw new Error(data.error || data.message || `Generation failed for ${model}`);
+        }
+
+        generatedResults.push(data);
+        // Update results incrementally so user sees progress
+        setResults([...generatedResults]);
       }
 
-      setResult(data);
+      setGenerationProgress(null);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Generation failed');
     } finally {
       setIsLoading(false);
+      setGenerationProgress(null);
     }
   };
 
   const canGenerate =
     selectedTemplate &&
-    selectedTemplate.variables.every((v) => variables[v]?.trim());
+    selectedTemplate.variables.every((v) => variables[v]?.trim()) &&
+    selectedTemplate.models &&
+    selectedTemplate.models.length > 0;
+
+  // Get display text for configured models
+  const getModelDisplayText = () => {
+    if (!selectedTemplate?.models || selectedTemplate.models.length === 0) {
+      return 'No model configured';
+    }
+    if (selectedTemplate.models.length === 1) {
+      return selectedTemplate.models[0];
+    }
+    return `${selectedTemplate.models.length} models (A/B test)`;
+  };
 
   return (
     <div className="space-y-6">
@@ -167,25 +203,57 @@ export function GenerateForm() {
         </Card>
       )}
 
-      {/* Step 3: Select Model */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <span className="flex items-center justify-center w-6 h-6 rounded-full bg-blue-100 text-blue-700 text-sm font-bold">
-              3
-            </span>
-            Select Model
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <ModelSelector selected={selectedModel} onSelect={setSelectedModel} />
-        </CardContent>
-      </Card>
+      {/* Model Info (Read-only, admin-controlled) */}
+      {selectedTemplate && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <span className="flex items-center justify-center w-6 h-6 rounded-full bg-gray-100 text-gray-500 text-sm font-bold">
+                <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                </svg>
+              </span>
+              Model Configuration
+              <span className="text-xs font-normal text-gray-500 ml-2">(Admin-controlled)</span>
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="bg-gray-50 rounded-lg px-4 py-3 border border-gray-200">
+              <p className="text-sm text-gray-700 font-medium">{getModelDisplayText()}</p>
+              {selectedTemplate.models && selectedTemplate.models.length > 1 && (
+                <div className="mt-2 flex flex-wrap gap-2">
+                  {selectedTemplate.models.map((model) => (
+                    <span
+                      key={model}
+                      className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800"
+                    >
+                      {model}
+                    </span>
+                  ))}
+                </div>
+              )}
+              {(!selectedTemplate.models || selectedTemplate.models.length === 0) && (
+                <p className="text-xs text-amber-600 mt-1">
+                  Configure model(s) in LangFuse prompt config: {`{ "model": "..." }`} or {`{ "models": [...] }`}
+                </p>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Error Message */}
       {error && (
         <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg">
           {error}
+        </div>
+      )}
+
+      {/* Generation Progress */}
+      {generationProgress && (
+        <div className="bg-blue-50 border border-blue-200 text-blue-700 px-4 py-3 rounded-lg flex items-center gap-2">
+          <Loader2 className="w-4 h-4 animate-spin" />
+          {generationProgress}
         </div>
       )}
 
@@ -201,13 +269,26 @@ export function GenerateForm() {
             <Loader2 className="w-4 h-4 mr-2 animate-spin" />
             Generating...
           </>
+        ) : selectedTemplate?.models && selectedTemplate.models.length > 1 ? (
+          `Generate with ${selectedTemplate.models.length} Models`
         ) : (
           'Generate Content'
         )}
       </Button>
 
-      {/* Result */}
-      {result && <GenerationResult result={result} />}
+      {/* Results */}
+      {results.length > 0 && (
+        <div className="space-y-4">
+          {results.length > 1 && (
+            <h3 className="text-lg font-semibold text-gray-900">
+              Results ({results.length} model{results.length > 1 ? 's' : ''})
+            </h3>
+          )}
+          {results.map((result) => (
+            <GenerationResult key={result.id} result={result} />
+          ))}
+        </div>
+      )}
     </div>
   );
 }

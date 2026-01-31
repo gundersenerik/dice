@@ -7,6 +7,7 @@ interface Template {
   name: string;
   version: number;
   variables: string[];
+  models: string[] | null;
 }
 
 interface TemplateSelectorProps {

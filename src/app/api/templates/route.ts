@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
-import { fetchPromptTemplates } from '@/lib/langfuse/prompts';
+import { fetchPromptTemplates, getModelsFromConfig } from '@/lib/langfuse/prompts';
 
 export async function GET() {
   try {
@@ -24,6 +24,8 @@ export async function GET() {
         name: t.name,
         version: t.version,
         variables: t.variables,
+        // Model(s) configured by admin in LangFuse
+        models: getModelsFromConfig(t.config),
         // Don't expose the actual prompt to the client
       })),
     });

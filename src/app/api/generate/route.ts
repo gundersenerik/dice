@@ -4,13 +4,14 @@ import { v4 as uuidv4 } from 'uuid';
 import { createClient } from '@/lib/supabase/server';
 import { createPortkeyClient } from '@/lib/portkey/client';
 import { getModelConfig, calculateCost } from '@/lib/portkey/models';
-import { getPromptById, compilePrompt } from '@/lib/langfuse/prompts';
+import { getPromptById, compilePrompt, getModelsFromConfig } from '@/lib/langfuse/prompts';
 import { getLangfuse, flushLangfuse } from '@/lib/langfuse/client';
 
 const GenerateRequestSchema = z.object({
   templateId: z.string().min(1),
   variables: z.record(z.string(), z.string()),
-  model: z.string().min(1),
+  // Model is now optional - will use prompt config if not provided
+  model: z.string().min(1).optional(),
 });
 
 export async function POST(request: NextRequest) {
@@ -41,16 +42,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const { templateId, variables, model } = validationResult.data;
-
-    // Validate model
-    const modelConfig = getModelConfig(model);
-    if (!modelConfig) {
-      return NextResponse.json(
-        { error: `Unknown model: ${model}` },
-        { status: 400 }
-      );
-    }
+    const { templateId, variables, model: requestedModel } = validationResult.data;
 
     // Fetch template from LangFuse
     const template = await getPromptById(templateId);
@@ -58,6 +50,26 @@ export async function POST(request: NextRequest) {
       return NextResponse.json(
         { error: `Template not found: ${templateId}` },
         { status: 404 }
+      );
+    }
+
+    // Determine model: use requested model, or first model from prompt config
+    const configModels = getModelsFromConfig(template.config);
+    const model = requestedModel || configModels?.[0];
+
+    if (!model) {
+      return NextResponse.json(
+        { error: 'No model specified in request or prompt config' },
+        { status: 400 }
+      );
+    }
+
+    // Validate model
+    const modelConfig = getModelConfig(model);
+    if (!modelConfig) {
+      return NextResponse.json(
+        { error: `Unknown model: ${model}` },
+        { status: 400 }
       );
     }
 
