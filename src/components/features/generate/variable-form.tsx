@@ -2,6 +2,8 @@
 
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { BrandSelector } from './brand-selector';
+import { TypeSelector } from './type-selector';
 
 interface VariableFormProps {
   variables: string[];
@@ -14,6 +16,7 @@ const VARIABLE_LABELS: Record<string, string> = {
   topic: 'Topic',
   segment: 'Target Audience/Segment',
   brand: 'Brand',
+  type: 'Communication Type',
   language: 'Language',
   context: 'Context',
   goal: 'Goal',
@@ -24,6 +27,7 @@ const VARIABLE_PLACEHOLDERS: Record<string, string> = {
   topic: 'e.g., Champions League final, Election results',
   segment: 'e.g., Football fans, Young professionals',
   brand: 'e.g., Aftonbladet, VG, Svenska Dagbladet',
+  type: 'e.g., Winback, Onboarding, Engagement',
   language: 'e.g., Swedish, Norwegian, English',
   context: 'e.g., Newsletter signup, Product page',
   goal: 'e.g., Increase clicks, Drive purchases',
@@ -46,12 +50,24 @@ export function VariableForm({
           <Label htmlFor={variable}>
             {VARIABLE_LABELS[variable] || formatVariableName(variable)}
           </Label>
-          <Input
-            id={variable}
-            value={values[variable] || ''}
-            onChange={(e) => handleChange(variable, e.target.value)}
-            placeholder={VARIABLE_PLACEHOLDERS[variable] || `Enter ${variable}`}
-          />
+          {variable === 'brand' ? (
+            <BrandSelector
+              value={values[variable] || ''}
+              onChange={(value) => handleChange(variable, value)}
+            />
+          ) : variable === 'type' ? (
+            <TypeSelector
+              value={values[variable] || ''}
+              onChange={(value) => handleChange(variable, value)}
+            />
+          ) : (
+            <Input
+              id={variable}
+              value={values[variable] || ''}
+              onChange={(e) => handleChange(variable, e.target.value)}
+              placeholder={VARIABLE_PLACEHOLDERS[variable] || `Enter ${variable}`}
+            />
+          )}
         </div>
       ))}
     </div>
